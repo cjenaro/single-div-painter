@@ -9,6 +9,7 @@ import {
 } from "@remix-run/react";
 
 import styles from "~/styles/main.css";
+import tw from "~/styles/app.css";
 
 export const links: LinksFunction = () => [
   {
@@ -17,7 +18,7 @@ export const links: LinksFunction = () => [
     rel: "stylesheet",
   },
   {
-    href: "https://unpkg.com/open-props/normalize.min.css",
+    href: tw,
     as: "style",
     rel: "stylesheet",
   },

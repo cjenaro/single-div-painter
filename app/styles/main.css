@@ -1,6 +1,6 @@
 main {
   display: grid;
-  grid-template-columns: 100px 1fr 200px;
+  grid-template-columns: 150px 1fr 200px;
   min-height: 100vh;
   font-family: sans-serif;
 }
