@@ -1,40 +1,35 @@
 import type { Color, Shape } from "@prisma/client";
 import { Tool } from "@prisma/client";
+import { ACTIONS } from "./constants";
 
 export type ShapeWithColors = Shape & {
   colors: Color[];
 };
 
-function getGradientType(type: Tool) {
+function getGradientType(type: Tool, direction: number | null) {
   let gradientType = "";
+  let dir = direction || 90;
   if (type === Tool.CIRCLE) {
     gradientType = "radial-gradient(";
   } else if (type === Tool.SQUARE) {
-    gradientType = "linear-gradient(";
+    gradientType = "linear-gradient(" + dir + "deg, ";
   }
 
   return gradientType;
 }
 
 function getColors(shape: ShapeWithColors) {
-  let colors = shape.colors.map((color) => color.color).join(", ");
+  let colors = shape.colors
+    .map((color) => `${color.color} ${color.stop}%`)
+    .join(", ");
   if (shape.type === Tool.CIRCLE) {
-    colors = colors + " 50%, transparent 50%";
+    colors = colors + ", transparent 50%";
   }
 
   return colors;
 }
 
-function getSelectedColors(shape: ShapeWithColors) {
-  let colors = "hotpink, hotpink";
-  if (shape.type === Tool.CIRCLE) {
-    colors = colors + " 50%, transparent 50%";
-  }
-
-  return colors;
-}
-
-function getSelectedSize(shape: Shape) {
+export function getSelectedSize(shape: Shape) {
   return `${shape.width + 5}px ${shape.height + 5}px`;
 }
 
@@ -42,7 +37,7 @@ function getSize(shape: Shape) {
   return `${shape.width}px ${shape.height}px`;
 }
 
-function getSelectedPosition(shape: Shape) {
+export function getSelectedPosition(shape: Shape) {
   return `${shape.x - 2.5}px ${shape.y - 2.5}px`;
 }
 
@@ -52,44 +47,44 @@ function getPosition(shape: Shape) {
 
 export function createBackgroundImageFromShapes(
   shapes: ShapeWithColors[],
-  selected?: number
+  formData?: FormData,
+  sessionTool?: Tool
 ) {
   if (!shapes || shapes.length < 1) return {};
+  let shapesForReducer = shapes;
 
-  return shapes.reduce(
+  if (formData && formData.get("action")?.toString() === ACTIONS.ADD_SHAPE) {
+    let oUIShape: ShapeWithColors = {
+      id: -1,
+      type: sessionTool || Tool.CIRCLE,
+      direction: 90,
+      x: Number(formData.get("x")) || 50,
+      y: Number(formData.get("y")) || 50,
+      height: Number(formData.get("height")) || 50,
+      width: Number(formData.get("width")) || 50,
+      colors: [
+        { id: -1, shapeId: -1, color: "#c4c4c4", opacity: 1, stop: 50 },
+        { id: -1, shapeId: -1, color: "#c4c4c4", opacity: 1, stop: 50 },
+      ],
+    };
+
+    shapesForReducer.push(oUIShape);
+  }
+
+  return shapesForReducer.reduce(
     (prev, current, index) => {
       let isLast = index === shapes.length - 1;
-      let gradient = getGradientType(current.type);
-      let isSelected: boolean = selected === current.id;
+      let gradient = getGradientType(current.type, current.direction);
       let colors = getColors(current);
 
-      let selectedBgImg = "";
-      let selectedBgSize = "";
-      let selectedBgPosition = "";
       let ending = isLast ? "" : ", ";
-
-      if (isSelected) {
-        selectedBgImg =
-          ", " + gradient + getSelectedColors(current) + ")" + ending;
-        selectedBgSize = ", " + getSelectedSize(current) + ending;
-        selectedBgPosition = ", " + getSelectedPosition(current) + ending;
-      }
 
       return {
         backgroundImage:
-          prev.backgroundImage +
-          gradient +
-          colors +
-          ")" +
-          (isSelected ? selectedBgImg : ending),
-        backgroundSize:
-          prev.backgroundSize +
-          getSize(current) +
-          (isSelected ? selectedBgSize : ending),
+          prev.backgroundImage + gradient + colors + ")" + ending,
+        backgroundSize: prev.backgroundSize + getSize(current) + ending,
         backgroundPosition:
-          prev.backgroundPosition +
-          getPosition(current) +
-          (isSelected ? selectedBgPosition : ending),
+          prev.backgroundPosition + getPosition(current) + ending,
       };
     },
     {

@@ -14,12 +14,14 @@ aside {
   width: 100%;
   height: 100%;
   background-repeat: no-repeat;
+  position: relative;
 }
 
 .edit {
   padding: 1rem;
-  display: grid;
-  grid-tempalte-columns: 1fr;
-  grid-gap: 1em;
-  background-color: #c4c4c4;
+}
+
+.selection {
+  position: absolute;
+  z-index: 2;
 }
