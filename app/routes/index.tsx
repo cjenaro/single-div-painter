@@ -340,10 +340,12 @@ export default function Index() {
   const fetcher = useFetcher();
 
   useEffect(() => {
-    let data = new FormData();
-    data.set("action", ACTIONS.HAS_JS);
-    data.set("has_js", "true");
-    fetcher.submit(data, { method: "post" });
+    if (fetcher.state === "idle" && !fetcher.submission) {
+      let data = new FormData();
+      data.set("action", ACTIONS.HAS_JS);
+      data.set("has_js", "true");
+      fetcher.submit(data, { method: "post" });
+    }
   }, [fetcher]);
 
   return (
