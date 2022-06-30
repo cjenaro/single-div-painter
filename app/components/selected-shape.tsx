@@ -10,7 +10,10 @@ export default function SelectedShape({
   selectedShape: ShapeWithColors;
 }) {
   return (
-    <fetcher.Form method="post" className="edit bg-sky-100 flex flex-col">
+    <fetcher.Form
+      method="post"
+      className="edit bg-sky-100 flex flex-col relative z-10"
+    >
       <input type="hidden" name="action" value={ACTIONS.EDIT_SHAPE} />
       <input
         type="hidden"

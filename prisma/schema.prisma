@@ -21,14 +21,14 @@ model Color {
 }
 
 model Shape {
-  id        Int     @id @default(autoincrement())
-  type      Tool
-  x         Int
-  y         Int
-  height    Int
-  width     Int
-  direction Int?
-  colors    Color[]
+  id         Int     @id @default(autoincrement())
+  type       Tool
+  x          Int
+  y          Int
+  height     Int
+  width      Int
+  direction  Int?
+  colors     Color[]
 }
 
 enum Tool {

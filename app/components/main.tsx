@@ -1,10 +1,17 @@
 import type { useFetcher } from "@remix-run/react";
 import React from "react";
 import type { DrawingSession } from "~/server/db.server";
-import { ACTIONS } from "~/utils/constants";
+import { ACTIONS, APP_TOOLS } from "~/utils/constants";
 import type { ShapeWithColors } from "~/utils/drawing";
 import { createBackgroundImageFromShapes } from "~/utils/drawing";
 import SelectionHighlight from "./selection-highlight";
+
+export type DragInfo = {
+  startX: number;
+  startY: number;
+  yOffset: number;
+  xOffset: number;
+};
 
 export default function Main({
   fetcher,
@@ -17,9 +24,7 @@ export default function Main({
   selectedShape: ShapeWithColors | null;
   shapes: ShapeWithColors[];
 }) {
-  const [dragInfo, setDragInfo] = React.useState<
-    { startX: number; startY: number; isIncreasingSize: boolean } | undefined
-  >();
+  const [dragInfo, setDragInfo] = React.useState<DragInfo>();
 
   function handleMouse(event: React.MouseEvent<HTMLFormElement>) {
     if (dragInfo) return;
@@ -38,8 +43,7 @@ export default function Main({
       );
     });
 
-    if (clickedOn) {
-      console.log(clickedOn);
+    if (clickedOn && session.tool === APP_TOOLS.SELECT) {
       form.set("selected", clickedOn.id.toString());
       form.set("action", ACTIONS.SELECT_SHAPE);
       return fetcher.submit(form, { method: "post" });
@@ -47,8 +51,6 @@ export default function Main({
 
     const x = clientX - left;
     const y = clientY - top;
-
-    console.log(x, y);
 
     form.set("x", x.toString());
     form.set("y", y.toString());
@@ -72,12 +74,14 @@ export default function Main({
             session.tool
           )}
         ></div>
+        
       </fetcher.Form>
       {selectedShape?.id ? (
         <SelectionHighlight
           shape={selectedShape}
           fetcher={fetcher}
           setDragInfo={setDragInfo}
+          dragInfo={dragInfo}
         />
       ) : null}
     </div>

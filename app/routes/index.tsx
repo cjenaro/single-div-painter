@@ -8,7 +8,8 @@ import Main from "~/components/main";
 import SelectedShape from "~/components/selected-shape";
 import Sidebar from "~/components/sidebar";
 import { createDrawingSession, getDrawingSession } from "~/server/db.server";
-import { ACTIONS, ERRORS } from "~/utils/constants";
+import { ACTIONS, APP_TOOLS, ERRORS } from "~/utils/constants";
+import { useEffect } from "react";
 
 export const loader: LoaderFunction = async ({ request }) => {
   let session = await getDrawingSession(request);
@@ -17,11 +18,14 @@ export const loader: LoaderFunction = async ({ request }) => {
     include: {
       colors: true,
     },
+    orderBy: {
+      id: "desc",
+    },
   });
 
   if (!session) {
     session = {
-      tool: Tool.CIRCLE,
+      tool: APP_TOOLS.SELECT,
     };
   }
 
@@ -39,7 +43,7 @@ export const loader: LoaderFunction = async ({ request }) => {
 export const action: ActionFunction = async ({ request }) => {
   const data = await request.formData();
   const drawingSession = await getDrawingSession(request);
-  let tool = drawingSession?.tool || Tool.CIRCLE;
+  let tool = drawingSession?.tool || APP_TOOLS.SELECT;
 
   const action = data.get("action")?.toString();
 
@@ -49,6 +53,15 @@ export const action: ActionFunction = async ({ request }) => {
     };
   }
 
+  if (action === ACTIONS.HAS_JS) {
+    const has_js = data.get("has_js")?.toString();
+
+    return createDrawingSession(request, {
+      ...drawingSession,
+      hasJS: has_js === "true",
+    });
+  }
+
   if (action === ACTIONS.EDIT_SHAPE) {
     const selected = Number(data.get("selected")?.toString());
     if (!selected || Number.isNaN(selected)) {
@@ -56,27 +69,27 @@ export const action: ActionFunction = async ({ request }) => {
     }
 
     let width = Number(data.get("width")?.toString());
-    if (!width || Number.isNaN(width)) {
+    if (typeof width !== "number" || Number.isNaN(width)) {
       return { error: ERRORS.BAD_SHAPE, field: "width" };
     }
 
     let height = Number(data.get("height")?.toString());
-    if (!height || Number.isNaN(height)) {
+    if (typeof height !== "number" || Number.isNaN(height)) {
       return { error: ERRORS.BAD_SHAPE, field: "height" };
     }
 
     let x = Number(data.get("x")?.toString());
-    if (!x || Number.isNaN(x)) {
+    if (typeof x !== "number" || Number.isNaN(x)) {
       return { error: ERRORS.BAD_SHAPE, field: "x" };
     }
 
     let y = Number(data.get("y")?.toString());
-    if (!y || Number.isNaN(y)) {
+    if (typeof y !== "number" || Number.isNaN(y)) {
       return { error: ERRORS.BAD_SHAPE, field: "y" };
     }
 
     let direction = Number(data.get("direction")?.toString());
-    if (!direction || Number.isNaN(direction)) {
+    if (typeof direction !== "number" || Number.isNaN(direction)) {
       return { error: ERRORS.BAD_SHAPE, field: "direction" };
     }
 
@@ -145,19 +158,115 @@ export const action: ActionFunction = async ({ request }) => {
     });
   }
 
+  if (action === ACTIONS.RESIZE_SHAPE) {
+    const selected = Number(data.get("selected")?.toString());
+    if (!selected || Number.isNaN(selected)) {
+      return { error: ERRORS.BAD_SELECTION };
+    }
+
+    let width = Number(data.get("width")?.toString());
+    if (typeof width !== "number" || Number.isNaN(width)) {
+      return { error: ERRORS.BAD_SHAPE, field: "width" };
+    }
+
+    let height = Number(data.get("height")?.toString());
+    if (typeof height !== "number" || Number.isNaN(height)) {
+      return { error: ERRORS.BAD_SHAPE, field: "height" };
+    }
+
+    await db.shape.update({
+      where: {
+        id: selected,
+      },
+      data: {
+        width,
+        height,
+      },
+    });
+  }
+
+  if (action === ACTIONS.MOVE_SHAPE) {
+    const selected = Number(data.get("selected")?.toString());
+    if (!selected || Number.isNaN(selected)) {
+      return { error: ERRORS.BAD_SELECTION };
+    }
+
+    let width = Number(data.get("width")?.toString());
+    if (typeof width !== "number" || Number.isNaN(width)) {
+      return { error: ERRORS.BAD_SHAPE, field: "width" };
+    }
+
+    let height = Number(data.get("height")?.toString());
+    if (typeof height !== "number" || Number.isNaN(height)) {
+      return { error: ERRORS.BAD_SHAPE, field: "height" };
+    }
+
+    let x = Number(data.get("x")?.toString());
+    if (typeof x !== "number" || Number.isNaN(x)) {
+      return { error: ERRORS.BAD_SHAPE, field: "x" };
+    }
+
+    let y = Number(data.get("y")?.toString());
+    if (typeof y !== "number" || Number.isNaN(y)) {
+      return { error: ERRORS.BAD_SHAPE, field: "y" };
+    }
+
+    await db.shape.update({
+      where: {
+        id: selected,
+      },
+      data: {
+        x,
+        y,
+        width,
+        height,
+      },
+    });
+
+    return createDrawingSession(request, { tool });
+  }
+
   if (action === ACTIONS.CLEAR_SESSION) {
     await db.shape.deleteMany();
     return createDrawingSession(request, { tool });
   }
 
   if (action === ACTIONS.PICK_TOOL) {
-    tool = data.get("tool")?.toString() as Tool;
+    tool = data.get("tool")?.toString() as Tool | APP_TOOLS;
 
     if (!tool) return { error: ERRORS.NO_TOOL };
-    if (tool !== Tool.CIRCLE && tool !== Tool.SQUARE)
-      return { error: ERRORS.BAD_TOOL };
+    if (
+      tool !== Tool.CIRCLE &&
+      tool !== Tool.SQUARE &&
+      tool !== APP_TOOLS.SELECT
+    )
+      return { error: ERRORS.BAD_TOOL, tool };
 
-    return createDrawingSession(request, { tool });
+    let created;
+    if (
+      !drawingSession.hasJS &&
+      (tool === Tool.CIRCLE || tool === Tool.SQUARE)
+    ) {
+      created = await db.shape.create({
+        data: {
+          type: tool,
+          x: 50,
+          y: 50,
+          height: 50,
+          width: 50,
+          colors: {
+            createMany: {
+              data: [
+                { color: "#c4c4c4", opacity: 1, stop: 50 },
+                { color: "#c4c4c4", opacity: 1, stop: 50 },
+              ],
+            },
+          },
+        },
+      });
+    }
+
+    return createDrawingSession(request, { tool, selectedShape: created?.id });
   }
 
   if (action === ACTIONS.ADD_SHAPE) {
@@ -168,7 +277,11 @@ export const action: ActionFunction = async ({ request }) => {
       ? Number(data.get("y")?.toString())
       : 50;
 
-    await db.shape.create({
+    if (tool !== Tool.CIRCLE && tool !== Tool.SQUARE) {
+      return { error: ERRORS.BAD_TOOL, tool };
+    }
+
+    let created = await db.shape.create({
       data: {
         type: tool,
         x,
@@ -188,6 +301,7 @@ export const action: ActionFunction = async ({ request }) => {
 
     return createDrawingSession(request, {
       tool,
+      selectedShape: created.id,
     });
   }
 
@@ -224,6 +338,13 @@ type LoaderData = {
 export default function Index() {
   const { session, selectedShape, shapes } = useLoaderData<LoaderData>();
   const fetcher = useFetcher();
+
+  useEffect(() => {
+    let data = new FormData();
+    data.set("action", ACTIONS.HAS_JS);
+    data.set("has_js", "true");
+    fetcher.submit(data, { method: "post" });
+  }, [fetcher]);
 
   return (
     <>

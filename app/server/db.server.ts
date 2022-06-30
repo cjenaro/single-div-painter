@@ -1,5 +1,6 @@
 import type { Tool } from "@prisma/client";
 import { createCookieSessionStorage, redirect } from "@remix-run/node";
+import type { APP_TOOLS } from "~/utils/constants";
 
 const COOKIE_KEY = "cooks";
 
@@ -26,8 +27,9 @@ export async function getDrawingSession(
 }
 
 export type DrawingSession = {
-  tool: Tool;
+  tool: Tool | APP_TOOLS;
   selectedShape?: number;
+  hasJS?: boolean;
 };
 
 export async function createDrawingSession(

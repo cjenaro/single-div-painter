@@ -1,51 +1,38 @@
 import { Tool } from "@prisma/client";
 import type { useFetcher } from "@remix-run/react";
 import type { ShapeWithColors } from "~/utils/drawing";
-// @ts-ignore
-import angleToCoordinates from "css-gradient-angle-to-svg-gradient-coordinates";
-
-const STROKE_WIDTH = 0.1;
-
-function isWithin(n1: number, n2: number, within = STROKE_WIDTH * 30) {
-  return Math.abs(n1 - n2) <= within;
-}
+import { createBackgroundImageFromShapes } from "~/utils/drawing";
+import { ACTIONS } from "~/utils/constants";
+import type { DragInfo } from "./main";
+import React from "react";
 
 export default function SelectionHighlight({
   shape,
   fetcher,
   setDragInfo,
+  dragInfo,
 }: {
   shape: ShapeWithColors;
   fetcher: ReturnType<typeof useFetcher>;
-  setDragInfo: React.Dispatch<
-    React.SetStateAction<
-      | {
-          startX: number;
-          startY: number;
-          isIncreasingSize: boolean;
-        }
-      | undefined
-    >
-  >;
+  dragInfo: DragInfo | undefined;
+  setDragInfo: React.Dispatch<React.SetStateAction<DragInfo | undefined>>;
 }) {
   let size = Math.max(shape.width, shape.height);
-  let w = shape.width / size;
-  let h = shape.height / size;
 
-  let delta = Math.abs(shape.width - shape.height);
+  let l = shape.x;
+  let t = shape.y;
 
-  let l =
-    shape.type === Tool.CIRCLE && shape.height > shape.width
-      ? shape.x - delta / 2
-      : shape.x;
-  let t =
-    shape.type === Tool.CIRCLE && shape.height < shape.width
-      ? shape.y - delta / 2
-      : shape.y;
+  let justDragged =
+    fetcher.submission?.formData.get("action") === ACTIONS.MOVE_SHAPE;
+
+  if (justDragged) {
+    let newX = Number(fetcher.submission?.formData.get("x"));
+    let newY = Number(fetcher.submission?.formData.get("y"));
+    l = newX;
+    t = newY;
+  }
 
   const handleDragStart: React.DragEventHandler<HTMLFormElement> = (event) => {
-    event.nativeEvent.preventDefault();
-
     let parent = event.currentTarget.parentElement as HTMLDivElement;
 
     let { left, top } = parent.getBoundingClientRect();
@@ -53,30 +40,55 @@ export default function SelectionHighlight({
     let x = event.clientX - left;
     let y = event.clientY - top;
 
-    let isIncreasingSize =
-      !!shape &&
-      (isWithin(shape.x, x) ||
-        isWithin(shape.x + shape.width, x) ||
-        isWithin(shape.y, y) ||
-        isWithin(shape.y + shape.height, y));
-
-    console.log(isIncreasingSize);
+    // offset from pointer to shapes edge
+    let xOffset = x - shape.x;
+    let yOffset = y - shape.y;
 
     setDragInfo({
-      startX: event.clientX,
-      startY: event.clientY,
-      isIncreasingSize,
+      startX: x,
+      startY: y,
+      yOffset,
+      xOffset,
     });
   };
 
   const handleDragEnd: React.DragEventHandler<HTMLFormElement> = (event) => {
-    console.log(event.clientX);
-    console.log(event.clientY);
+    if (!dragInfo) return;
+    event.preventDefault();
+
+    let parent = event.currentTarget.parentElement as HTMLDivElement;
+    let { left, top } = parent.getBoundingClientRect();
+    let x = event.clientX - left - dragInfo.xOffset;
+    let y = event.clientY - top - dragInfo.yOffset;
+
+    let data = new FormData(event.currentTarget);
+    let height = shape.height;
+    let width = shape.width;
+
+    data.set("action", ACTIONS.MOVE_SHAPE);
+
+    data.set("selected", shape.id.toString());
+    data.set("width", width.toString());
+    data.set("height", height.toString());
+    data.set("x", x.toString());
+    data.set("y", y.toString());
+
+    fetcher.submit(data, { method: "post" });
 
     setDragInfo(undefined);
   };
 
-  const coordinates = angleToCoordinates(shape.direction || 90);
+  function handlePointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    let el = event.target as HTMLDivElement;
+    let { width, height } = el.getBoundingClientRect();
+    let data = new FormData();
+    data.set("action", ACTIONS.RESIZE_SHAPE);
+    data.set("selected", shape.id.toString());
+    data.set("width", width.toString());
+    data.set("height", height.toString());
+
+    fetcher.submit(data, { method: "post" });
+  }
 
   return (
     <fetcher.Form
@@ -89,78 +101,18 @@ export default function SelectionHighlight({
         width: size + "px",
         height: size + "px",
       }}
-      className="absolute"
+      className="absolute cursor-pointer"
     >
-      <svg
-        className="w-full h-full"
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 1 1"
-      >
-        <defs>
-          {shape.type === Tool.CIRCLE ? (
-            <radialGradient id="fill" {...coordinates}>
-              {shape.colors.map((color) => (
-                <stop
-                  key={color.id}
-                  offset={`${color.stop}%`}
-                  stopColor={color.color}
-                />
-              ))}
-            </radialGradient>
-          ) : (
-            <linearGradient id="fill" {...coordinates}>
-              {shape.colors.map((color) => (
-                <stop
-                  key={color.id}
-                  offset={`${color.stop}%`}
-                  stopColor={color.color}
-                />
-              ))}
-            </linearGradient>
-          )}
-        </defs>
-        {shape.type === Tool.CIRCLE ? (
-          <>
-            <ellipse
-              rx={w - STROKE_WIDTH / 2.5}
-              ry={h - STROKE_WIDTH / 2.5}
-              cx="0.5"
-              cy="0.5"
-              className="cursor-pointer"
-              fill="url(#fill)"
-            />
-            <ellipse
-              rx={w / 2.5}
-              ry={h / 2.5}
-              cx="0.5"
-              cy="0.5"
-              stroke="yellow"
-              strokeWidth={STROKE_WIDTH}
-              className="cursor-row-resize"
-            />
-          </>
-        ) : (
-          <>
-            <rect
-              width={w}
-              height={h}
-              x="0"
-              y="0"
-              stroke="yellow"
-              strokeWidth={STROKE_WIDTH}
-              className="cursor-row-resize"
-            />
-            <rect
-              width={w - STROKE_WIDTH}
-              height={h - STROKE_WIDTH}
-              x={0 + STROKE_WIDTH / 2}
-              y={0 + STROKE_WIDTH / 2}
-              className="cursor-pointer"
-              fill="url(#fill)"
-            />
-          </>
-        )}
-      </svg>
+      <div
+        className="resize overflow-auto border-2 border-yellow-200 bg-no-repeat"
+        onPointerUp={handlePointerUp}
+        style={{
+          width: shape.width + "px",
+          height: shape.height + "px",
+          backgroundImage: createBackgroundImageFromShapes([shape])
+            .backgroundImage,
+        }}
+      ></div>
     </fetcher.Form>
   );
 }

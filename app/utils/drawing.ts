@@ -1,5 +1,6 @@
 import type { Color, Shape } from "@prisma/client";
 import { Tool } from "@prisma/client";
+import type { APP_TOOLS } from "./constants";
 import { ACTIONS } from "./constants";
 
 export type ShapeWithColors = Shape & {
@@ -48,15 +49,33 @@ function getPosition(shape: Shape) {
 export function createBackgroundImageFromShapes(
   shapes: ShapeWithColors[],
   formData?: FormData,
-  sessionTool?: Tool
-) {
-  if (!shapes || shapes.length < 1) return {};
+  sessionTool?: Tool | APP_TOOLS
+): {
+  backgroundImage: string;
+  backgroundSize: string;
+  backgroundPosition: string;
+} {
+  if (!shapes || shapes.length < 1)
+    return {
+      backgroundImage: "",
+      backgroundPosition: "",
+      backgroundSize: "",
+    };
   let shapesForReducer = shapes;
 
+  let isMoving =
+    formData && formData.get("action")?.toString() === ACTIONS.MOVE_SHAPE;
+  let isResizing =
+    formData && formData.get("action")?.toString() === ACTIONS.RESIZE_SHAPE;
+
   if (formData && formData.get("action")?.toString() === ACTIONS.ADD_SHAPE) {
+    let sTool =
+      sessionTool === Tool.CIRCLE || sessionTool === Tool.SQUARE
+        ? sessionTool
+        : Tool.CIRCLE;
     let oUIShape: ShapeWithColors = {
       id: -1,
-      type: sessionTool || Tool.CIRCLE,
+      type: sTool,
       direction: 90,
       x: Number(formData.get("x")) || 50,
       y: Number(formData.get("y")) || 50,
@@ -73,18 +92,40 @@ export function createBackgroundImageFromShapes(
 
   return shapesForReducer.reduce(
     (prev, current, index) => {
+      let ouiShape = { ...current };
       let isLast = index === shapes.length - 1;
-      let gradient = getGradientType(current.type, current.direction);
-      let colors = getColors(current);
+      let gradient = getGradientType(ouiShape.type, ouiShape.direction);
+
+      if (isMoving && formData && isSelectedShape(ouiShape, formData)) {
+        let x = Number(formData.get("x")?.toString());
+        let y = Number(formData.get("y")?.toString());
+        let width = Number(formData.get("width")?.toString());
+        let height = Number(formData.get("height")?.toString());
+
+        ouiShape.x = x;
+        ouiShape.y = y;
+        ouiShape.width = width;
+        ouiShape.height = height;
+      }
+
+      if (isResizing && formData && isSelectedShape(ouiShape, formData)) {
+        let width = Number(formData.get("width")?.toString());
+        let height = Number(formData.get("height")?.toString());
+
+        ouiShape.width = width;
+        ouiShape.height = height;
+      }
+
+      let colors = getColors(ouiShape);
 
       let ending = isLast ? "" : ", ";
 
       return {
         backgroundImage:
           prev.backgroundImage + gradient + colors + ")" + ending,
-        backgroundSize: prev.backgroundSize + getSize(current) + ending,
+        backgroundSize: prev.backgroundSize + getSize(ouiShape) + ending,
         backgroundPosition:
-          prev.backgroundPosition + getPosition(current) + ending,
+          prev.backgroundPosition + getPosition(ouiShape) + ending,
       };
     },
     {
@@ -93,4 +134,12 @@ export function createBackgroundImageFromShapes(
       backgroundPosition: "",
     }
   );
+}
+
+function isSelectedShape(shape: ShapeWithColors, formData?: FormData) {
+  if (!formData) return false;
+  const selected = Number(formData.get("selected")?.toString());
+  if (!selected) return false;
+
+  return selected === shape.id;
 }
