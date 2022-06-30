@@ -9,7 +9,7 @@ import SelectedShape from "~/components/selected-shape";
 import Sidebar from "~/components/sidebar";
 import { createDrawingSession, getDrawingSession } from "~/server/db.server";
 import { ACTIONS, APP_TOOLS, ERRORS } from "~/utils/constants";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 export const loader: LoaderFunction = async ({ request }) => {
   let session = await getDrawingSession(request);
@@ -338,13 +338,19 @@ type LoaderData = {
 export default function Index() {
   const { session, selectedShape, shapes } = useLoaderData<LoaderData>();
   const fetcher = useFetcher();
+  const wasSubmitted = useRef(false);
 
   useEffect(() => {
-    if (fetcher.state === "idle" && !fetcher.submission) {
+    if (
+      fetcher.state === "idle" &&
+      !fetcher.submission &&
+      !wasSubmitted.current
+    ) {
       let data = new FormData();
       data.set("action", ACTIONS.HAS_JS);
       data.set("has_js", "true");
       fetcher.submit(data, { method: "post" });
+      wasSubmitted.current = true;
     }
   }, [fetcher]);
 
